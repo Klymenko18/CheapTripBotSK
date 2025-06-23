@@ -1,109 +1,123 @@
 import requests
 from datetime import datetime
 
+
 def search_tickets(month: str, max_price: int):
-    results = []
-    origins = ["BTS"]  # можна додати VIE, BUD тощо
-    destinations = ["STN", "BCN", "DUB", "PAR", "FCO"]  # приклад
     year = datetime.now().year
+    results = []
+    offset = 0
+    limit = 64
 
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/115.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0",
         "Accept": "application/json"
     }
 
-    for origin in origins:
-        for destination in destinations:
-            url = "https://services-api.ryanair.com/farfnd/3/oneWayFares"
-            params = {
-                "departureAirportIataCode": origin,
-                "arrivalAirportIataCode": destination,
-                "outboundDepartureDateFrom": f"{year}-{month}-01",
-                "outboundDepartureDateTo": f"{year}-{month}-30",
-                "priceValueTo": max_price,
-                "market": "sk-sk",
-                "language": "sk",
-                "limit": 16,
-                "offset": 0
-            }
-            try:
-                response = requests.get(url, params=params, headers=headers)
-                data = response.json()
-            except Exception as e:
+    while True:
+        url = "https://services-api.ryanair.com/farfnd/3/oneWayFares"
+        params = {
+            "departureAirportIataCode": "BTS",
+            "outboundDepartureDateFrom": f"{year}-{month}-01",
+            "outboundDepartureDateTo": f"{year}-{month}-31",
+            "market": "sk-sk",
+            "language": "sk",
+            "limit": limit,
+            "offset": offset,
+            "priceValueTo": max_price
+        }
+
+        try:
+            response = requests.get(url, params=params, headers=headers)
+            data = response.json()
+            fares = data.get("fares", [])
+        except Exception as e:
+            results.append(f"⚠️ Помилка при запиті: {str(e)}")
+            break
+
+        if not fares:
+            break
+
+        for fare in fares:
+            outbound = fare.get("outbound", {})
+            price_info = outbound.get("price", {})
+            price = price_info.get("value", 999)
+            currency = price_info.get("currencyCode", "EUR")
+
+            if price > max_price:
                 continue
 
-            for fare in data.get("fares", []):
-                price = fare.get("outbound", {}).get("price", {}).get("value", 999)
-                if price > max_price:
-                    continue
+            departure = outbound.get("departureAirport", {}).get("iataCode", "???")
+            arrival = outbound.get("arrivalAirport", {}).get("iataCode", "???")
+            date = outbound.get("departureDate", "")[:10]
 
-                departure = fare["outbound"]["departureAirport"]["iataCode"]
-                arrival = fare["outbound"]["arrivalAirport"]["iataCode"]
-                date = fare["outbound"]["departureDate"][:10]
-                currency = fare["outbound"]["price"]["currencyCode"]
-                url = (
-                    f"https://www.ryanair.com/gb/en/trip/flights/select?"
-                    f"adults=1&teens=0&children=0&infants=0&isConnectedFlight=false&isReturn=false&discount=0"
-                    f"&originIata={departure}&destinationIata={arrival}&dateOut={date}"
-                )
+            booking_url = (
+                f"https://www.ryanair.com/gb/en/trip/flights/select?"
+                f"adults=1&teens=0&children=0&infants=0&isConnectedFlight=false"
+                f"&isReturn=false&discount=0"
+                f"&originIata={departure}&destinationIata={arrival}&dateOut={date}"
+            )
 
-                text = (
-                    f"<b>✈️ {departure} → {arrival}</b>\n"
-                    f"<b>📅 Дата:</b> {date}\n"
-                    f"<b>💰 Ціна:</b> {price} {currency}\n"
-                    f"<a href='{url}'>🔗 Перейти до білету</a>"
-                )
-                results.append(text)
+            text = (
+                f"<b>✈️ {departure} → {arrival}</b>\n"
+                f"<b>📅 Дата:</b> {date}\n"
+                f"<b>💰 Ціна:</b> {price} {currency}\n"
+                f"<a href='{booking_url}'>🔗 Перейти до білету</a>"
+            )
+            results.append(text)
+
+        total = data.get("total", 0)
+        offset += limit
+        if offset >= total:
+            break
 
     if not results:
-        results.append(
-            f"<b>✈️ BTS → PRG</b>\n"
-            f"<b>📅 Дата:</b> {year}-{month}-15\n"
-            f"<b>💰 Ціна:</b> 29€\n"
-            f"<a href='https://www.ryanair.com'>🔗 Фейкове посилання</a>"
-        )
+        results.append("❌ Квитків не знайдено на цей місяць.")
 
     return results
+
 
 def get_cheapest_from_bratislava(month: str):
     year = datetime.now().year
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/115.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0",
         "Accept": "application/json"
     }
     url = "https://services-api.ryanair.com/farfnd/3/oneWayFares"
     params = {
         "departureAirportIataCode": "BTS",
         "outboundDepartureDateFrom": f"{year}-{month}-01",
-        "outboundDepartureDateTo": f"{year}-{month}-30",
+        "outboundDepartureDateTo": f"{year}-{month}-31",
         "market": "sk-sk",
         "language": "sk",
-        "limit": 10,
+        "limit": 64,
         "offset": 0
     }
     try:
         response = requests.get(url, params=params, headers=headers)
         data = response.json()
     except Exception:
-        return None
+        return "⚠️ Не вдалося отримати відповідь від сервера."
 
     fares = data.get("fares", [])
     if not fares:
-        return None
+        return "❌ Квитків не знайдено."
 
     cheapest = min(
         fares,
         key=lambda f: f.get("outbound", {}).get("price", {}).get("value", 999)
     )
 
-    departure = cheapest["outbound"]["departureAirport"]["iataCode"]
-    arrival = cheapest["outbound"]["arrivalAirport"]["iataCode"]
-    date = cheapest["outbound"]["departureDate"][:10]
-    price = cheapest["outbound"]["price"]["value"]
-    currency = cheapest["outbound"]["price"]["currencyCode"]
-    url = (
+    outbound = cheapest.get("outbound", {})
+    departure = outbound.get("departureAirport", {}).get("iataCode", "???")
+    arrival = outbound.get("arrivalAirport", {}).get("iataCode", "???")
+    date = outbound.get("departureDate", "")[:10]
+    price = outbound.get("price", {}).get("value", 999)
+    currency = outbound.get("price", {}).get("currencyCode", "EUR")
+
+    booking_url = (
         f"https://www.ryanair.com/gb/en/trip/flights/select?"
-        f"adults=1&teens=0&children=0&infants=0&isConnectedFlight=false&isReturn=false&discount=0"
+        f"adults=1&teens=0&children=0&infants=0&isConnectedFlight=false"
+        f"&isReturn=false&discount=0"
         f"&originIata={departure}&destinationIata={arrival}&dateOut={date}"
     )
 
@@ -112,5 +126,5 @@ def get_cheapest_from_bratislava(month: str):
         f"<b>✈️ {departure} → {arrival}</b>\n"
         f"<b>📅 Дата:</b> {date}\n"
         f"<b>💰 Ціна:</b> {price} {currency}\n"
-        f"<a href='{url}'>🔗 Перейти до білету</a>"
+        f"<a href='{booking_url}'>🔗 Перейти до білету</a>"
     )
