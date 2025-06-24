@@ -1,5 +1,5 @@
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from calendar import monthrange
 
 
@@ -135,3 +135,26 @@ def get_cheapest_from_bratislava(month: str):
         f"<b>💰 Cena:</b> {price} {currency}\n"
         f"<a href='{booking_url}'>🔗 Zobraziť let</a>"
     )
+
+
+def get_cheapest_next_7_days():
+    today = datetime.now().date()
+    results = []
+
+    for i in range(7):
+        day = today + timedelta(days=i)
+        m = str(day.month).zfill(2)
+        d_results = search_tickets(m, 999, 0)
+        for r in d_results:
+            if f"{day.year}-{m}-{str(day.day).zfill(2)}" in r:
+                results.append((day, r))
+
+    if not results:
+        return "❌ Nenašli sa žiadne lety na najbližší týždeň."
+
+    cheapest = min(
+        results,
+        key=lambda x: float(x[1].split("Cena:</b> ")[1].split(" ")[0].replace(",", "."))
+    )
+
+    return f"🟢 Najlacnejší let z najbližších 7 dní:\n{cheapest[1]}"

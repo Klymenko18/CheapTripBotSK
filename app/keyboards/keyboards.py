@@ -15,10 +15,13 @@ def origin_keyboard():
 
 def month_keyboard():
     builder = InlineKeyboardBuilder()
-    months = ["07", "08", "09", "10", "11", "12"]  # 06 прибрано
+    months = ["07", "08", "09", "10", "11", "12"]
     for m in months:
         builder.add(InlineKeyboardButton(text=f"📅 {m}", callback_data=m))
-    builder.add(InlineKeyboardButton(text="🔙 Späť", callback_data="back"))
+    builder.add(
+        InlineKeyboardButton(text="🗓️ Najbližších 7 dní", callback_data="week"),
+        InlineKeyboardButton(text="🔙 Späť", callback_data="back")
+    )
     builder.adjust(3)
     return builder.as_markup()
 
@@ -34,3 +37,4 @@ def price_keyboard():
     )
     builder.adjust(2)
     return builder.as_markup()
+

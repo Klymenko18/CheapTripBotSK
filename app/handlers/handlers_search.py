@@ -1,9 +1,14 @@
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
+from datetime import datetime, timedelta
 from app.states import SearchStates
 from app.keyboards.keyboards import month_keyboard, price_keyboard
-from app.parsers.ryanair_parser import search_tickets, get_cheapest_from_bratislava
+from app.parsers.ryanair_parser import (
+    search_tickets,
+    get_cheapest_from_bratislava,
+    get_cheapest_next_7_days,
+)
 
 router = Router()
 
@@ -35,6 +40,42 @@ async def price_selected(callback: CallbackQuery, state: FSMContext):
     price_cb = callback.data
 
     if price_cb == "back":
+        await callback.message.answer("Vyber si mesiac pre vyhľadávanie ✈️", reply_markup=month_keyboard())
+        await state.set_state(SearchStates.month)
+        return
+
+    if month == "week":
+        if price_cb == "cheapest":
+            await callback.message.answer("🔍 Hľadáme najlacnejší let na najbližších 7 dní...")
+            result = get_cheapest_next_7_days()
+            await callback.message.answer(result)
+        else:
+            min_price = 0
+            max_price = 999
+            if price_cb == "30":
+                max_price = 30
+            elif price_cb == "50":
+                min_price = 30
+                max_price = 50
+
+            await callback.message.answer(f"🔎 Hľadáme lety na najbližších 7 dní medzi {min_price}–{max_price}€...")
+            today = datetime.now().date()
+            results = []
+
+            for i in range(7):
+                day = today + timedelta(days=i)
+                m = str(day.month).zfill(2)
+                d_results = search_tickets(m, max_price, min_price)
+                for r in d_results:
+                    if f"{day.year}-{m}-{str(day.day).zfill(2)}" in r:
+                        results.append(r)
+
+            if results:
+                for r in results:
+                    await callback.message.answer(r)
+            else:
+                await callback.message.answer("❌ Nenašli sa žiadne lety na najbližší týždeň.")
+
         await callback.message.answer("Vyber si mesiac pre vyhľadávanie ✈️", reply_markup=month_keyboard())
         await state.set_state(SearchStates.month)
         return
