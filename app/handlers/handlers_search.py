@@ -10,47 +10,59 @@ router = Router()
 @router.message(F.text == "/start")
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
-    await message.answer("Обери місяць для пошуку ✈️", reply_markup=month_keyboard())
+    await message.answer("Vyber mesiac na hľadanie ✈️", reply_markup=month_keyboard())
     await state.set_state(SearchStates.month)
 
 @router.callback_query(SearchStates.month)
 async def month_selected(callback: CallbackQuery, state: FSMContext):
+    if callback.data == "back":
+        await cmd_start(callback.message, state)
+        return
+
     await callback.answer()
     await state.update_data(month=callback.data)
-    await callback.message.answer("Обери діапазон цін 💶", reply_markup=price_keyboard())
+    await callback.message.answer("Vyber cenový rozsah 💶", reply_markup=price_keyboard())
     await state.set_state(SearchStates.price)
 
 @router.callback_query(SearchStates.price)
 async def price_selected(callback: CallbackQuery, state: FSMContext):
+    if callback.data == "back":
+        await callback.message.answer("Vyber mesiac znova ✈️", reply_markup=month_keyboard())
+        await state.set_state(SearchStates.month)
+        return
+
     await callback.answer()
     data = await state.get_data()
     month = data.get("month")
-    price_cb = callback.data
+    cb = callback.data
 
-    if price_cb == "cheapest":
-        await callback.message.answer(f"🔍 Шукаємо найдешевший квиток з Братислави у {month} місяці...")
+    if cb == "cheapest":
+        await callback.message.answer(f"🔍 Hľadáme najlacnejší let z Bratislavy v mesiaci {month}...")
         result = get_cheapest_from_bratislava(month)
-        if result:
-            await callback.message.answer(result)
-        else:
-            await callback.message.answer("❌ Нічого не знайдено.")
+        await callback.message.answer(result or "❌ Nič sa nenašlo.")
         await state.clear()
         return
 
     try:
-        price = 999 if price_cb == "all" else int(price_cb)
+        min_price = 0
+        max_price = 999
+        if cb == "to30":
+            max_price = 30
+        elif cb == "30to50":
+            min_price = 30
+            max_price = 50
     except ValueError:
-        await callback.message.answer("⚠️ Помилка у ціні.")
+        await callback.message.answer("⚠️ Chyba v cene.")
         await state.clear()
         return
 
-    await callback.message.answer(f"🔍 Шукаємо квитки в {month} місяці до {price}€...")
-    results = search_tickets(month, price)  # міста не передаємо
+    await callback.message.answer(f"🔍 Hľadáme lety v {month}. mesiaci medzi {min_price}–{max_price}€...")
+    results = search_tickets(month, max_price, min_price)
 
     if results:
         for r in results:
             await callback.message.answer(r)
     else:
-        await callback.message.answer("❌ Квитків не знайдено.")
+        await callback.message.answer("❌ Lety sa nenašli.")
 
     await state.clear()

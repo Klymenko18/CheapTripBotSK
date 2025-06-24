@@ -1,8 +1,7 @@
 import requests
 from datetime import datetime
 
-
-def search_tickets(month: str, max_price: int):
+def search_tickets(month: str, max_price: int, min_price: int = 0):
     year = datetime.now().year
     results = []
     offset = 0
@@ -31,7 +30,7 @@ def search_tickets(month: str, max_price: int):
             data = response.json()
             fares = data.get("fares", [])
         except Exception as e:
-            results.append(f"⚠️ Помилка при запиті: {str(e)}")
+            results.append(f"⚠️ Chyba pri požiadavke: {str(e)}")
             break
 
         if not fares:
@@ -43,7 +42,7 @@ def search_tickets(month: str, max_price: int):
             price = price_info.get("value", 999)
             currency = price_info.get("currencyCode", "EUR")
 
-            if price > max_price:
+            if not (min_price <= price <= max_price):
                 continue
 
             departure = outbound.get("departureAirport", {}).get("iataCode", "???")
@@ -59,9 +58,9 @@ def search_tickets(month: str, max_price: int):
 
             text = (
                 f"<b>✈️ {departure} → {arrival}</b>\n"
-                f"<b>📅 Дата:</b> {date}\n"
-                f"<b>💰 Ціна:</b> {price} {currency}\n"
-                f"<a href='{booking_url}'>🔗 Перейти до білету</a>"
+                f"<b>📅 Dátum:</b> {date}\n"
+                f"<b>💰 Cena:</b> {price} {currency}\n"
+                f"<a href='{booking_url}'>🔗 Zobraziť let</a>"
             )
             results.append(text)
 
@@ -71,7 +70,7 @@ def search_tickets(month: str, max_price: int):
             break
 
     if not results:
-        results.append("❌ Квитків не знайдено на цей місяць.")
+        results.append("❌ Nenašli sa žiadne lety v tomto mesiaci.")
 
     return results
 
@@ -92,15 +91,16 @@ def get_cheapest_from_bratislava(month: str):
         "limit": 64,
         "offset": 0
     }
+
     try:
         response = requests.get(url, params=params, headers=headers)
         data = response.json()
     except Exception:
-        return "⚠️ Не вдалося отримати відповідь від сервера."
+        return "⚠️ Nepodarilo sa získať odpoveď zo servera."
 
     fares = data.get("fares", [])
     if not fares:
-        return "❌ Квитків не знайдено."
+        return "❌ Nenašli sa žiadne lety."
 
     cheapest = min(
         fares,
@@ -122,9 +122,9 @@ def get_cheapest_from_bratislava(month: str):
     )
 
     return (
-        f"<b>🟢 Найдешевший квиток з Братислави ({month}):</b>\n"
+        f"<b>🟢 Najlacnejší let z Bratislavy ({month}):</b>\n"
         f"<b>✈️ {departure} → {arrival}</b>\n"
-        f"<b>📅 Дата:</b> {date}\n"
-        f"<b>💰 Ціна:</b> {price} {currency}\n"
-        f"<a href='{booking_url}'>🔗 Перейти до білету</a>"
+        f"<b>📅 Dátum:</b> {date}\n"
+        f"<b>💰 Cena:</b> {price} {currency}\n"
+        f"<a href='{booking_url}'>🔗 Zobraziť let</a>"
     )
