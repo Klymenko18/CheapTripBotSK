@@ -1,5 +1,7 @@
 import requests
 from datetime import datetime
+from calendar import monthrange
+
 
 def search_tickets(month: str, max_price: int, min_price: int = 0):
     year = datetime.now().year
@@ -12,12 +14,14 @@ def search_tickets(month: str, max_price: int, min_price: int = 0):
         "Accept": "application/json"
     }
 
+    _, last_day = monthrange(year, int(month))
+
     while True:
         url = "https://services-api.ryanair.com/farfnd/3/oneWayFares"
         params = {
             "departureAirportIataCode": "BTS",
             "outboundDepartureDateFrom": f"{year}-{month}-01",
-            "outboundDepartureDateTo": f"{year}-{month}-31",
+            "outboundDepartureDateTo": f"{year}-{month}-{last_day:02d}",
             "market": "sk-sk",
             "language": "sk",
             "limit": limit,
@@ -30,7 +34,7 @@ def search_tickets(month: str, max_price: int, min_price: int = 0):
             data = response.json()
             fares = data.get("fares", [])
         except Exception as e:
-            results.append(f"⚠️ Chyba pri požiadavke: {str(e)}")
+            results.append(f"⚠️ Chyba počas požiadavky: {str(e)}")
             break
 
         if not fares:
@@ -42,7 +46,7 @@ def search_tickets(month: str, max_price: int, min_price: int = 0):
             price = price_info.get("value", 999)
             currency = price_info.get("currencyCode", "EUR")
 
-            if not (min_price <= price <= max_price):
+            if price < min_price or price > max_price:
                 continue
 
             departure = outbound.get("departureAirport", {}).get("iataCode", "???")
@@ -81,11 +85,14 @@ def get_cheapest_from_bratislava(month: str):
         "User-Agent": "Mozilla/5.0",
         "Accept": "application/json"
     }
+
+    _, last_day = monthrange(year, int(month))
+
     url = "https://services-api.ryanair.com/farfnd/3/oneWayFares"
     params = {
         "departureAirportIataCode": "BTS",
         "outboundDepartureDateFrom": f"{year}-{month}-01",
-        "outboundDepartureDateTo": f"{year}-{month}-31",
+        "outboundDepartureDateTo": f"{year}-{month}-{last_day:02d}",
         "market": "sk-sk",
         "language": "sk",
         "limit": 64,
@@ -100,7 +107,7 @@ def get_cheapest_from_bratislava(month: str):
 
     fares = data.get("fares", [])
     if not fares:
-        return "❌ Nenašli sa žiadne lety."
+        return "❌ Nenašli sa žiadne lety v tomto mesiaci."
 
     cheapest = min(
         fares,
