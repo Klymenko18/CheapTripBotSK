@@ -7,66 +7,62 @@ from app.parsers.ryanair_parser import search_tickets, get_cheapest_from_bratisl
 
 router = Router()
 
+
 @router.message(F.text == "/start")
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
     await message.answer("Vyber si mesiac pre vyhľadávanie ✈️", reply_markup=month_keyboard())
     await state.set_state(SearchStates.month)
 
+
 @router.callback_query(SearchStates.month)
 async def month_selected(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
     if callback.data == "back":
-        await state.clear()
-        await callback.message.edit_text("Vyber si mesiac pre vyhľadávanie ✈️", reply_markup=month_keyboard())
+        await cmd_start(callback.message, state)
         return
 
-    await callback.answer()
     await state.update_data(month=callback.data)
-    await callback.message.edit_text("Vyber si cenový rozsah 💶", reply_markup=price_keyboard())
+    await callback.message.answer("Vyber cenový rozsah 💶", reply_markup=price_keyboard())
     await state.set_state(SearchStates.price)
+
 
 @router.callback_query(SearchStates.price)
 async def price_selected(callback: CallbackQuery, state: FSMContext):
-    if callback.data == "back":
-        await callback.message.edit_text("Vyber si mesiac pre vyhľadávanie ✈️", reply_markup=month_keyboard())
-        await state.set_state(SearchStates.month)
-        return
-
     await callback.answer()
     data = await state.get_data()
     month = data.get("month")
     price_cb = callback.data
 
+    if price_cb == "back":
+        await callback.message.answer("Vyber si mesiac pre vyhľadávanie ✈️", reply_markup=month_keyboard())
+        await state.set_state(SearchStates.month)
+        return
+
     if price_cb == "cheapest":
-        await callback.message.edit_text(f"🔍 Hľadáme najlacnejšiu letenku z Bratislavy v mesiaci {month}...")
+        await callback.message.answer(f"🔍 Hľadáme najlacnejšiu letenku z Bratislavy v mesiaci {month}...")
         result = get_cheapest_from_bratislava(month)
         await callback.message.answer(result)
-        await callback.message.answer("⬅️ Späť", reply_markup=month_keyboard())
+        await callback.message.answer("Vyber si mesiac pre vyhľadávanie ✈️", reply_markup=month_keyboard())
         await state.set_state(SearchStates.month)
         return
 
     try:
-        if price_cb == "all":
-            min_price, max_price = 0, 999
-        elif price_cb == "30":
-            min_price, max_price = 0, 30
+        min_price = 0
+        max_price = 999
+        if price_cb == "30":
+            max_price = 30
         elif price_cb == "50":
-            min_price, max_price = 30, 50
-        else:
-            raise ValueError
-    except ValueError:
-        await callback.message.edit_text("⚠️ Neplatná cena.")
-        await state.clear()
-        return
+            min_price = 30
+            max_price = 50
 
-    await callback.message.edit_text(f"🔍 Hľadáme letenky v mesiaci {month} za {min_price}–{max_price} €...")
-    results = search_tickets(month, max_price, min_price)
+        await callback.message.answer(f"🔎 Hľadáme lety v {month}. mesiaci medzi {min_price}–{max_price}€...")
+        results = search_tickets(month, max_price, min_price)
+        for text in results:
+            await callback.message.answer(text)
 
-    if results:
-        for r in results:
-            await callback.message.answer(r, parse_mode="HTML", disable_web_page_preview=True)
-    else:
-        await callback.message.answer("❌ Nenašli sa žiadne letenky.")
+    except Exception as e:
+        await callback.message.answer(f"⚠️ Chyba: {str(e)}")
 
-    await callback.message.answer("⬅️ Späť", reply_markup=month_keyboard())
+    await callback.message.answer("Vyber si mesiac pre vyhľadávanie ✈️", reply_markup=month_keyboard())
     await state.set_state(SearchStates.month)
