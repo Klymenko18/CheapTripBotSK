@@ -1,6 +1,7 @@
 import requests
 from datetime import datetime, timedelta
 from calendar import monthrange
+from app.utils.cities import get_city_name  # <- новий імпорт
 
 
 def search_tickets(month: str, max_price: int, min_price: int = 0):
@@ -61,7 +62,7 @@ def search_tickets(month: str, max_price: int, min_price: int = 0):
             )
 
             text = (
-                f"<b>✈️ {departure} → {arrival}</b>\n"
+                f"<b>✈️ {get_city_name(departure)} → {get_city_name(arrival)}</b>\n"
                 f"<b>📅 Dátum:</b> {date}\n"
                 f"<b>💰 Cena:</b> {price} {currency}\n"
                 f"<a href='{booking_url}'>🔗 Zobraziť let</a>"
@@ -130,7 +131,7 @@ def get_cheapest_from_bratislava(month: str):
 
     return (
         f"<b>🟢 Najlacnejší let z Bratislavy ({month}):</b>\n"
-        f"<b>✈️ {departure} → {arrival}</b>\n"
+        f"<b>✈️ {get_city_name(departure)} → {get_city_name(arrival)}</b>\n"
         f"<b>📅 Dátum:</b> {date}\n"
         f"<b>💰 Cena:</b> {price} {currency}\n"
         f"<a href='{booking_url}'>🔗 Zobraziť let</a>"

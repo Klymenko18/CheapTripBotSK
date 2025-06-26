@@ -81,6 +81,12 @@ async def price_selected(callback: CallbackQuery, state: FSMContext):
         return
 
     if price_cb == "cheapest":
+        if not month.isdigit():
+            await callback.message.answer("⚠️ Vyber si konkrétny mesiac, nie možnosť 'Všetky'.")
+            await callback.message.answer("Vyber si mesiac pre vyhľadávanie ✈️", reply_markup=month_keyboard())
+            await state.set_state(SearchStates.month)
+            return
+
         await callback.message.answer(f"🔍 Hľadáme najlacnejšiu letenku z Bratislavy v mesiaci {month}...")
         result = get_cheapest_from_bratislava(month)
         await callback.message.answer(result)
@@ -89,6 +95,9 @@ async def price_selected(callback: CallbackQuery, state: FSMContext):
         return
 
     try:
+        if not month.isdigit():
+            raise ValueError("Mesiac musí byť číslo")
+
         min_price = 0
         max_price = 999
         if price_cb == "30":
