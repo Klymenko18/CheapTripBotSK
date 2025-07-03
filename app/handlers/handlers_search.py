@@ -2,20 +2,16 @@ from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 from datetime import datetime, timedelta
+
 from app.states import SearchStates
 from app.keyboards.keyboards import (
     month_keyboard,
     price_keyboard,
     origin_keyboard,
     country_keyboard,
-    return_choice_keyboard,
-    return_day_keyboard,
+    return_day_keyboard
 )
-from app.parsers.ryanair_parser import (
-    search_tickets,
-    get_cheapest_from_city,
-    get_cheapest_next_7_days,
-)
+from app.parsers.ryanair_parser import search_tickets, get_cheapest_from_city, get_cheapest_next_7_days
 from app.utils.cities import get_city_name
 
 router = Router()
@@ -109,29 +105,15 @@ async def process_country(callback: CallbackQuery, state: FSMContext):
 
     country = callback.data.split(":")[1]
     await state.update_data(country=country)
-    await callback.message.answer("Chceš aj spiatočný let? ➡️🛬", reply_markup=return_choice_keyboard())
-    await state.set_state(SearchStates.return_choice)
 
-@router.callback_query(SearchStates.return_choice)
-async def process_return_choice(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
-    data = callback.data
-    if data == "return:yes":
-        search_data = await state.get_data()
-        month = search_data.get("month")
-        await callback.message.answer("Vyber deň spiatočného letu:", reply_markup=return_day_keyboard(month))
-        await state.set_state(SearchStates.return_date)
-    elif data == "return:no":
-        await callback.message.answer("🔍 Hľadáme lety, počkaj chvíľu...")
-        data = await state.get_data()
-        results = search_tickets(data)
-        if results:
-            await send_batch(results, callback.message.answer)
-        else:
-            await callback.message.answer("❌ Nenašli sa žiadne lety.")
-        await cmd_start(callback.message, state)
+    await callback.message.answer("🔍 Hľadáme lety, počkaj chvíľu...")
+    data = await state.get_data()
+    results = search_tickets(data)
+    if results:
+        await send_batch(results, callback.message.answer)
     else:
-        await callback.message.answer("⚠️ Neznáma odpoveď. Skús znova.")
+        await callback.message.answer("❌ Nenašli sa žiadne lety.")
+    await cmd_start(callback.message, state)
 
 @router.callback_query(SearchStates.return_date)
 async def process_return_day(callback: CallbackQuery, state: FSMContext):

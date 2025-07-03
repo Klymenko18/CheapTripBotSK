@@ -67,21 +67,15 @@ def country_keyboard():
         ("🇸🇪 Švédsko", "SE"),
         ("🇩🇰 Dánsko", "DK"),
         ("🇵🇱 Poľsko", "PL"),
-        ("🌍 Všetky krajiny", "ALL"),
     ]
     builder = InlineKeyboardBuilder()
     for label, code in countries:
         builder.add(InlineKeyboardButton(text=label, callback_data=f"country:{code}"))
-    builder.add(InlineKeyboardButton(text="🔙 Späť", callback_data="back"))
-    builder.adjust(2)
-    return builder.as_markup()
-
-def return_choice_keyboard():
-    builder = InlineKeyboardBuilder()
     builder.add(
-        InlineKeyboardButton(text="✅ Áno (chcem späť)", callback_data="return:yes"),
-        InlineKeyboardButton(text="❌ Nie (len jednosmerný)", callback_data="return:no")
+        InlineKeyboardButton(text="🌍 Všetky krajiny", callback_data="country:ALL"),
+        InlineKeyboardButton(text="🔙 Späť", callback_data="back")
     )
+    builder.adjust(2)
     return builder.as_markup()
 
 def return_day_keyboard(month: str):

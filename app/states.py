@@ -5,8 +5,7 @@ class SearchStates(StatesGroup):
     month = State()
     price = State()
     country = State()
-    return_choice = State()
-    return_date = State()
+    return_date = State()  # залишено, якщо ще буде використовуватись для ±3 днів
 
 class SubscribeStates(StatesGroup):
     waiting_for_route = State()
