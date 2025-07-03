@@ -1,118 +1,163 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 from datetime import datetime, timedelta
 from app.states import SearchStates
-from app.keyboards.keyboards import month_keyboard, price_keyboard
+from app.keyboards.keyboards import (
+    month_keyboard,
+    price_keyboard,
+    origin_keyboard,
+    country_keyboard,
+    return_choice_keyboard,
+    return_day_keyboard,
+)
 from app.parsers.ryanair_parser import (
     search_tickets,
-    get_cheapest_from_bratislava,
+    get_cheapest_from_city,
     get_cheapest_next_7_days,
 )
+from app.utils.cities import get_city_name
 
 router = Router()
 
+async def send_batch(messages: list[str], send_func):
+    batch_size = 10
+    for i in range(0, len(messages), batch_size):
+        text = "\n\n".join(messages[i:i+batch_size])
+        await send_func(text)
 
 @router.message(F.text == "/start")
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
-    await message.answer("Vyber si mesiac pre vyhľadávanie ✈️", reply_markup=month_keyboard())
-    await state.set_state(SearchStates.month)
+    await message.answer("Z ktorého mesta hľadáme? 🌍", reply_markup=origin_keyboard())
+    await state.set_state(SearchStates.origin)
 
-
-@router.callback_query(SearchStates.month)
-async def month_selected(callback: CallbackQuery, state: FSMContext):
+@router.callback_query(SearchStates.origin)
+async def process_origin(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     if callback.data == "back":
-        await cmd_start(callback.message, state)
-        return
+        return await cmd_start(callback.message, state)
+
+    if ":" not in callback.data:
+        await callback.message.answer("⚠️ Neznáma voľba. Skús znova.")
+        return await cmd_start(callback.message, state)
+
+    code = callback.data.split(":")[1]
+    await state.update_data(origin=code)
+    await callback.message.answer("Vyber si mesiac pre vyhľadávanie ✈️", reply_markup=month_keyboard())
+    await state.set_state(SearchStates.month)
+
+@router.callback_query(SearchStates.month)
+async def process_month(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    if callback.data == "back":
+        return await cmd_start(callback.message, state)
+
+    if callback.data == "week":
+        data = await state.get_data()
+        origin = data.get("origin")
+        if not origin:
+            await callback.message.answer("⚠️ Najprv vyber mesto odletu.")
+            return await cmd_start(callback.message, state)
+
+        city_name = get_city_name(origin)
+        await callback.message.answer(f"🔍 Hľadáme najlacnejší let z najbližších 7 dní z {city_name}...")
+        result = get_cheapest_next_7_days(origin)
+        await callback.message.answer(result)
+        return await cmd_start(callback.message, state)
 
     await state.update_data(month=callback.data)
     await callback.message.answer("Vyber cenový rozsah 💶", reply_markup=price_keyboard())
     await state.set_state(SearchStates.price)
 
-
 @router.callback_query(SearchStates.price)
-async def price_selected(callback: CallbackQuery, state: FSMContext):
+async def process_price(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
-    data = await state.get_data()
-    month = data.get("month")
-    price_cb = callback.data
+    if callback.data == "back":
+        return await cmd_start(callback.message, state)
 
-    if price_cb == "back":
-        await callback.message.answer("Vyber si mesiac pre vyhľadávanie ✈️", reply_markup=month_keyboard())
-        await state.set_state(SearchStates.month)
-        return
+    await state.update_data(price=callback.data)
 
-    if month == "week":
-        if price_cb == "cheapest":
-            await callback.message.answer("🔍 Hľadáme najlacnejší let na najbližších 7 dní...")
-            result = get_cheapest_next_7_days()
-            await callback.message.answer(result)
-        else:
-            min_price = 0
-            max_price = 999
-            if price_cb == "30":
-                max_price = 30
-            elif price_cb == "50":
-                min_price = 30
-                max_price = 50
+    if callback.data == "cheapest":
+        data = await state.get_data()
+        month = data.get("month")
+        origin = data.get("origin", "BTS")
 
-            await callback.message.answer(f"🔎 Hľadáme lety na najbližších 7 dní medzi {min_price}–{max_price}€...")
-            today = datetime.now().date()
-            results = []
+        if not month:
+            await callback.message.answer("⚠️ Vyber najprv mesiac.")
+            return await state.set_state(SearchStates.month)
 
-            for i in range(7):
-                day = today + timedelta(days=i)
-                m = str(day.month).zfill(2)
-                d_results = search_tickets(m, max_price, min_price)
-                for r in d_results:
-                    if f"{day.year}-{m}-{str(day.day).zfill(2)}" in r:
-                        results.append(r)
+        if not origin:
+            await callback.message.answer("⚠️ Vyber najprv mesto.")
+            return await state.set_state(SearchStates.origin)
 
-            if results:
-                for r in results:
-                    await callback.message.answer(r)
-            else:
-                await callback.message.answer("❌ Nenašli sa žiadne lety na najbližší týždeň.")
-
-        await callback.message.answer("Vyber si mesiac pre vyhľadávanie ✈️", reply_markup=month_keyboard())
-        await state.set_state(SearchStates.month)
-        return
-
-    if price_cb == "cheapest":
-        if not month.isdigit():
-            await callback.message.answer("⚠️ Vyber si konkrétny mesiac, nie možnosť 'Všetky'.")
-            await callback.message.answer("Vyber si mesiac pre vyhľadávanie ✈️", reply_markup=month_keyboard())
-            await state.set_state(SearchStates.month)
-            return
-
-        await callback.message.answer(f"🔍 Hľadáme najlacnejšiu letenku z Bratislavy v mesiaci {month}...")
-        result = get_cheapest_from_bratislava(month)
+        city_name = get_city_name(origin)
+        await callback.message.answer(f"🔍 Hľadáme najlacnejší let z {city_name} v mesiaci {month}...")
+        result = get_cheapest_from_city(month, origin)
         await callback.message.answer(result)
-        await callback.message.answer("Vyber si mesiac pre vyhľadávanie ✈️", reply_markup=month_keyboard())
-        await state.set_state(SearchStates.month)
-        return
+        return await cmd_start(callback.message, state)
 
-    try:
-        if not month.isdigit():
-            raise ValueError("Mesiac musí byť číslo")
+    await callback.message.answer("Vyber krajinu príletu 🌐", reply_markup=country_keyboard())
+    await state.set_state(SearchStates.country)
 
-        min_price = 0
-        max_price = 999
-        if price_cb == "30":
-            max_price = 30
-        elif price_cb == "50":
-            min_price = 30
-            max_price = 50
+@router.callback_query(SearchStates.country)
+async def process_country(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    if callback.data == "back":
+        await callback.message.answer("Vyber cenový rozsah 💶", reply_markup=price_keyboard())
+        return await state.set_state(SearchStates.price)
 
-        await callback.message.answer(f"🔎 Hľadáme lety v {month}. mesiaci medzi {min_price}–{max_price}€...")
-        results = search_tickets(month, max_price, min_price)
-        for text in results:
-            await callback.message.answer(text)
+    country = callback.data.split(":")[1]
+    await state.update_data(country=country)
+    await callback.message.answer("Chceš aj spiatočný let? ➡️🛬", reply_markup=return_choice_keyboard())
+    await state.set_state(SearchStates.return_choice)
 
-    except Exception as e:
-        await callback.message.answer(f"⚠️ Chyba: {str(e)}")
+@router.callback_query(SearchStates.return_choice)
+async def process_return_choice(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    data = callback.data
+    if data == "return:yes":
+        search_data = await state.get_data()
+        month = search_data.get("month")
+        await callback.message.answer("Vyber deň spiatočného letu:", reply_markup=return_day_keyboard(month))
+        await state.set_state(SearchStates.return_date)
+    elif data == "return:no":
+        await callback.message.answer("🔍 Hľadáme lety, počkaj chvíľu...")
+        data = await state.get_data()
+        results = search_tickets(data)
+        if results:
+            await send_batch(results, callback.message.answer)
+        else:
+            await callback.message.answer("❌ Nenašli sa žiadne lety.")
+        await cmd_start(callback.message, state)
+    else:
+        await callback.message.answer("⚠️ Neznáma odpoveď. Skús znova.")
 
-    await callback.message.answer("Vyber si mesiac pre vyhľadávanie ✈️", reply_markup=month_keyboard())
-    await state.set_state(SearchStates.month)
+@router.callback_query(SearchStates.return_date)
+async def process_return_day(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    if not callback.data.startswith("returnday:"):
+        return await callback.message.answer("⚠️ Neznámy deň.")
+    day = callback.data.split(":")[1]
+    search_data = await state.get_data()
+    year = datetime.now().year
+    month = search_data.get("month")
+    return_date = f"{year}-{month}-{day}"
+    await state.update_data(return_date=return_date)
+
+    return_city = get_city_name(search_data.get("origin", ""))
+    await callback.message.answer(f"🔍 Hľadáme lety ±3 dni od {return_date} z {return_city}, čakaj...")
+
+    center_date = datetime.strptime(return_date, "%Y-%m-%d").date()
+    results = []
+    for delta in range(-3, 4):
+        date_check = center_date + timedelta(days=delta)
+        search_data["return_date"] = date_check.strftime("%Y-%m-%d")
+        results += search_tickets(search_data)
+
+    if results:
+        await send_batch(results, callback.message.answer)
+    else:
+        await callback.message.answer("❌ Nenašli sa žiadne lety.")
+
+    await cmd_start(callback.message, state)
