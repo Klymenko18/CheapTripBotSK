@@ -10,11 +10,7 @@ load_dotenv()
 
 async def set_bot_commands(bot):
     commands = [
-        BotCommand(command="start", description="Запуск меню"),
-        BotCommand(command="clear", description="Очистити історію"),
-        BotCommand(command="subscribe", description="Підписка на маршрут"),
-        BotCommand(command="my_subscriptions", description="Мої підписки"),
-        BotCommand(command="unsubscribe", description="Скасувати підписку"),
+        BotCommand(command="start", description="Start"),
     ]
     await bot.set_my_commands(commands)
 

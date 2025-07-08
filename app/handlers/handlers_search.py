@@ -8,8 +8,7 @@ from app.keyboards.keyboards import (
     month_keyboard,
     price_keyboard,
     origin_keyboard,
-    country_keyboard,
-    return_day_keyboard
+    # return_day_keyboard — видалено
 )
 from app.parsers.ryanair_parser import search_tickets, get_cheapest_from_city, get_cheapest_next_7_days
 from app.utils.cities import get_city_name
@@ -93,53 +92,14 @@ async def process_price(callback: CallbackQuery, state: FSMContext):
         await callback.message.answer(result)
         return await cmd_start(callback.message, state)
 
-    await callback.message.answer("Vyber krajinu príletu 🌐", reply_markup=country_keyboard())
-    await state.set_state(SearchStates.country)
-
-@router.callback_query(SearchStates.country)
-async def process_country(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
-    if callback.data == "back":
-        await callback.message.answer("Vyber cenový rozsah 💶", reply_markup=price_keyboard())
-        return await state.set_state(SearchStates.price)
-
-    country = callback.data.split(":")[1]
-    await state.update_data(country=country)
-
+    # 🔻 Одразу виконуємо пошук без вибору країни
     await callback.message.answer("🔍 Hľadáme lety, počkaj chvíľu...")
     data = await state.get_data()
     results = search_tickets(data)
-    if results:
-        await send_batch(results, callback.message.answer)
-    else:
-        await callback.message.answer("❌ Nenašli sa žiadne lety.")
-    await cmd_start(callback.message, state)
-
-@router.callback_query(SearchStates.return_date)
-async def process_return_day(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
-    if not callback.data.startswith("returnday:"):
-        return await callback.message.answer("⚠️ Neznámy deň.")
-    day = callback.data.split(":")[1]
-    search_data = await state.get_data()
-    year = datetime.now().year
-    month = search_data.get("month")
-    return_date = f"{year}-{month}-{day}"
-    await state.update_data(return_date=return_date)
-
-    return_city = get_city_name(search_data.get("origin", ""))
-    await callback.message.answer(f"🔍 Hľadáme lety ±3 dni od {return_date} z {return_city}, čakaj...")
-
-    center_date = datetime.strptime(return_date, "%Y-%m-%d").date()
-    results = []
-    for delta in range(-3, 4):
-        date_check = center_date + timedelta(days=delta)
-        search_data["return_date"] = date_check.strftime("%Y-%m-%d")
-        results += search_tickets(search_data)
 
     if results:
         await send_batch(results, callback.message.answer)
     else:
-        await callback.message.answer("❌ Nenašli sa žiadne lety.")
+        await callback.message.answer("❌ Nič sa nenašlo v danom mesiaci.")
 
     await cmd_start(callback.message, state)

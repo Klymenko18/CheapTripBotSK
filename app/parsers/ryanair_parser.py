@@ -44,21 +44,20 @@ def search_tickets(data):
     }
 
     url = "https://services-api.ryanair.com/farfnd/3/oneWayFares"
-    while True:
-        params = {
-            "departureAirportIataCode": origin,
-            "outboundDepartureDateFrom": f"{year}-{month}-01",
-            "outboundDepartureDateTo": f"{year}-{month}-{last_day:02d}",
-            "market": market,
-            "language": "sk",
-            "limit": limit,
-            "offset": offset,
-            "priceValueTo": max_price
-        }
+    params = {
+        "departureAirportIataCode": origin,
+        "outboundDepartureDateFrom": f"{year}-{month}-01",
+        "outboundDepartureDateTo": f"{year}-{month}-{last_day:02d}",
+        "market": market,
+        "language": "sk",
+        "limit": limit,
+        "offset": offset,
+        "priceValueTo": max_price
+    }
 
+    while True:
         try:
             response = requests.get(url, params=params, headers=headers)
-            response.raise_for_status()
             data_json = response.json()
             fares = data_json.get("fares", [])
         except Exception as e:
@@ -70,9 +69,8 @@ def search_tickets(data):
 
         for fare in fares:
             out = fare.get("outbound", {})
-            arrival = out.get("arrivalAirport", {})
-            arrival_iata = arrival.get("iataCode", "")
-            arrival_country = arrival.get("countryCode", "")
+            arrival = out.get("arrivalAirport", {}).get("iataCode", "")
+            arrival_country = out.get("arrivalAirport", {}).get("countryCode", "")
 
             if country and country != "ALL" and arrival_country != country:
                 continue
@@ -85,13 +83,14 @@ def search_tickets(data):
                 f"https://www.ryanair.com/gb/en/trip/flights/select?"
                 f"adults=1&teens=0&children=0&infants=0&isConnectedFlight=false"
                 f"&isReturn={bool(return_date)}&discount=0"
-                f"&originIata={origin}&destinationIata={arrival_iata}&dateOut={date}"
+                f"&originIata={origin}&destinationIata={arrival}&dateOut={date}"
             )
+
             if return_date:
                 booking_url += f"&dateIn={return_date}"
 
             text = (
-                f"<b>✈️ {get_city_name(origin)} → {get_city_name(arrival_iata)}</b>\n"
+                f"<b>✈️ {get_city_name(origin)} → {get_city_name(arrival)}</b>\n"
                 f"<b>📅 Dátum:</b> {date}\n"
                 f"<b>💰 Cena:</b> {price} {currency}\n"
                 f"<a href='{booking_url}'>🔗 Zobraziť let</a>"

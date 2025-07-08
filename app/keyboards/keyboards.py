@@ -71,25 +71,7 @@ def country_keyboard():
     builder = InlineKeyboardBuilder()
     for label, code in countries:
         builder.add(InlineKeyboardButton(text=label, callback_data=f"country:{code}"))
-    builder.add(
-        InlineKeyboardButton(text="🌍 Všetky krajiny", callback_data="country:ALL"),
-        InlineKeyboardButton(text="🔙 Späť", callback_data="back")
-    )
-    builder.adjust(2)
-    return builder.as_markup()
-
-def return_day_keyboard(month: str):
-    builder = InlineKeyboardBuilder()
-    year = datetime.now().year
-    try:
-        month_int = int(month)
-        _, last_day = monthrange(year, month_int)
-    except ValueError:
-        return builder.as_markup()
-
-    for day in range(1, last_day + 1):
-        day_str = str(day).zfill(2)
-        builder.add(InlineKeyboardButton(text=day_str, callback_data=f"returnday:{day_str}"))
+    builder.add(InlineKeyboardButton(text="🌍 Všetky krajiny", callback_data="country:ALL"))
     builder.add(InlineKeyboardButton(text="🔙 Späť", callback_data="back"))
-    builder.adjust(7)
+    builder.adjust(2)
     return builder.as_markup()
