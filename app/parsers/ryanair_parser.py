@@ -1,205 +1,190 @@
 from datetime import datetime, timedelta
-from calendar import monthrange
 import requests
 from app.utils.cities import get_city_name
 
-def search_tickets(data):
-    origin = data.get("origin", "BTS")
-    month = data.get("month")
-    price_cb = data.get("price")
-    return_date = data.get("return_date")
-    country = data.get("country")
+HEADERS = {
+    "User-Agent": "Mozilla/5.0",
+    "Accept": "application/json",
+}
 
-    year = datetime.now().year
-
-    try:
-        month_int = int(month)
-        _, last_day = monthrange(year, month_int)
-    except (ValueError, TypeError):
-        return ["⚠️ Invalid month value. Please start search again."]
-
-    min_price = 0
-    max_price = 999
-    if price_cb == "30":
-        max_price = 30
-    elif price_cb == "50":
-        min_price = 30
-        max_price = 50
-
-    origin_market_map = {
+def _market_for(origin: str) -> str:
+    return {
         "BTS": "sk-sk",
         "KSC": "sk-sk",
         "VIE": "at-en",
         "BUD": "hu-hu",
-    }
-    market = origin_market_map.get(origin, "sk-sk")
+    }.get(origin, "sk-sk")
 
-    results = []
-    offset = 0
-    limit = 64
+def _price_bounds(price_cb: str) -> tuple[float, float]:
+    if price_cb == "p:<=50":
+        return 0, 50
+    if price_cb == "p:50-80":
+        return 50, 80
+    return 0, 9999
 
-    headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json"
-    }
+def _range_bounds(return_cb: str) -> tuple[int, int]:
+    if return_cb == "r:1-3":
+        return 1, 3
+    if return_cb == "r:3-5":
+        return 3, 5
+    if return_cb == "r:5-10":
+        return 5, 10
+    return 1, 14  # r:cheap14
 
+def _one_way_fares(
+    origin: str,
+    date_from: str,
+    date_to: str,
+    arrival: str | None = None,
+    market: str | None = None,
+    limit: int = 64,
+    offset: int = 0,
+):
     url = "https://services-api.ryanair.com/farfnd/3/oneWayFares"
     params = {
         "departureAirportIataCode": origin,
-        "outboundDepartureDateFrom": f"{year}-{month}-01",
-        "outboundDepartureDateTo": f"{year}-{month}-{last_day:02d}",
-        "market": market,
+        "outboundDepartureDateFrom": date_from,
+        "outboundDepartureDateTo": date_to,
+        "market": market or _market_for(origin),
         "language": "sk",
         "limit": limit,
         "offset": offset,
-        "priceValueTo": max_price
     }
+    if arrival:
+        params["arrivalAirportIataCode"] = arrival
 
-    while True:
+    res = requests.get(url, params=params, headers=HEADERS, timeout=20)
+    res.raise_for_status()
+    data = res.json()
+    return data.get("fares", []), data.get("total", 0)
+
+def search_round_trip(origin: str, outbound_date: str, price_cb: str, return_cb: str) -> list[str]:
+    min_price, max_price = _price_bounds(price_cb)
+    min_d, max_d = _range_bounds(return_cb)
+
+    fares, _ = _one_way_fares(
+        origin=origin,
+        date_from=outbound_date,
+        date_to=outbound_date,
+        market=_market_for(origin),
+    )
+    if not fares:
+        return []
+
+    candidates = []
+    for f in fares:
+        out = f.get("outbound", {})
+        arr = out.get("arrivalAirport", {}).get("iataCode")
+        if not arr:
+            continue
+        out_price = (out.get("price") or {}).get("value", 9999)
+        out_currency = (out.get("price") or {}).get("currencyCode", "EUR")
+
+        if not (min_price <= float(out_price) <= max_price):
+            continue
+
+        dep = datetime.strptime(outbound_date, "%Y-%m-%d").date()
+        date_from = (dep + timedelta(days=min_d)).strftime("%Y-%m-%d")
+        date_to = (dep + timedelta(days=max_d)).strftime("%Y-%m-%d")
+
         try:
-            response = requests.get(url, params=params, headers=headers)
-            data_json = response.json()
-            fares = data_json.get("fares", [])
-        except Exception as e:
-            results.append(f"⚠️ Chyba počas požiadavky: {str(e)}")
-            break
-
-        if not fares:
-            break
-
-        for fare in fares:
-            out = fare.get("outbound", {})
-            arrival = out.get("arrivalAirport", {}).get("iataCode", "")
-            arrival_country = out.get("arrivalAirport", {}).get("countryCode", "")
-
-            if country and country != "ALL" and arrival_country != country:
-                continue
-
-            date = out.get("departureDate", "")[:10]
-            price = out.get("price", {}).get("value", 999)
-            currency = out.get("price", {}).get("currencyCode", "EUR")
-
-            booking_url = (
-                f"https://www.ryanair.com/gb/en/trip/flights/select?"
-                f"adults=1&teens=0&children=0&infants=0&isConnectedFlight=false"
-                f"&isReturn={bool(return_date)}&discount=0"
-                f"&originIata={origin}&destinationIata={arrival}&dateOut={date}"
+            back_fares, _ = _one_way_fares(
+                origin=arr,
+                arrival=origin,
+                date_from=date_from,
+                date_to=date_to,
+                market=_market_for(arr),
             )
+        except Exception:
+            continue
 
-            if return_date:
-                booking_url += f"&dateIn={return_date}"
+        if not back_fares:
+            continue
 
-            text = (
-                f"<b>✈️ {get_city_name(origin)} → {get_city_name(arrival)}</b>\n"
-                f"<b>📅 Dátum:</b> {date}\n"
-                f"<b>💰 Cena:</b> {price} {currency}\n"
-                f"<a href='{booking_url}'>🔗 Zobraziť let</a>"
-            )
-            results.append(text)
+        best_back = min(
+            back_fares,
+            key=lambda bf: (bf.get("outbound", {}).get("price") or {}).get("value", 9999)
+        )
+        back_leg = best_back.get("outbound", {})
+        back_date = (back_leg.get("departureDate") or "")[:10]
+        back_price = (back_leg.get("price") or {}).get("value", 9999)
+        back_currency = (back_leg.get("price") or {}).get("currencyCode", "EUR")
 
-        offset += limit
-        if offset >= data_json.get("total", 0):
-            break
+        total_price = float(out_price) + float(back_price)
+        candidates.append({
+            "to": arr,
+            "out_date": outbound_date,
+            "back_date": back_date,
+            "out_price": out_price,
+            "back_price": back_price,
+            "currency": out_currency or back_currency or "EUR",
+            "total": total_price,
+        })
 
-    if not results:
-        results.append("❌ Nič sa nenašlo v danom mesiaci.")
+    candidates.sort(key=lambda x: x["total"])
+    results = []
+    for c in candidates[:30]:
+        booking_url = (
+            "https://www.ryanair.com/gb/en/trip/flights/select?"
+            "adults=1&teens=0&children=0&infants=0&isConnectedFlight=false"
+            f"&isReturn=true&discount=0&originIata={origin}&destinationIata={c['to']}"
+            f"&dateOut={c['out_date']}&dateIn={c['back_date']}"
+        )
+        results.append(
+            f"<b>✈️ {get_city_name(origin)} → {get_city_name(c['to'])}</b>\n"
+            f"📅 <b>Odlet:</b> {c['out_date']} • <b>Návrat:</b> {c['back_date']}\n"
+            f"💶 <b>Odlet:</b> {c['out_price']} {c['currency']}  |  "
+            f"<b>Návrat:</b> {c['back_price']} {c['currency']}\n"
+            f"🟢 <b>Spolu:</b> {c['total']:.2f} {c['currency']}\n"
+            f"<a href='{booking_url}'>🔗 Otvoriť v Ryanair</a>"
+        )
 
     return results
 
-
-def get_cheapest_from_city(month: str, origin: str):
-    year = datetime.now().year
-    try:
-        month_int = int(month)
-        _, last_day = monthrange(year, month_int)
-    except (ValueError, TypeError):
-        return "⚠️ Invalid month value. Please restart search."
-
-    headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json"
-    }
-
-    origin_market_map = {
-        "BTS": "sk-sk",
-        "KSC": "sk-sk",
-        "VIE": "at-en",
-        "BUD": "hu-hu",
-    }
-    market = origin_market_map.get(origin, "sk-sk")
-
-    url = "https://services-api.ryanair.com/farfnd/3/oneWayFares"
-    params = {
-        "departureAirportIataCode": origin,
-        "outboundDepartureDateFrom": f"{year}-{month}-01",
-        "outboundDepartureDateTo": f"{year}-{month}-{last_day:02d}",
-        "market": market,
-        "language": "sk",
-        "limit": 64,
-        "offset": 0
-    }
-
-    try:
-        response = requests.get(url, params=params, headers=headers)
-        data = response.json()
-    except Exception:
-        return "⚠️ Nepodarilo sa získať odpoveď zo servera."
-
-    fares = data.get("fares", [])
-    if not fares:
-        return "❌ Nenašli sa žiadne lety v tomto mesiaci."
-
-    cheapest = min(
-        fares,
-        key=lambda f: f.get("outbound", {}).get("price", {}).get("value", 999)
-    )
-
-    outbound = cheapest.get("outbound", {})
-    departure = outbound.get("departureAirport", {}).get("iataCode", "???")
-    arrival = outbound.get("arrivalAirport", {}).get("iataCode", "???")
-    date = outbound.get("departureDate", "")[:10]
-    price = outbound.get("price", {}).get("value", 999)
-    currency = outbound.get("price", {}).get("currencyCode", "EUR")
-
-    booking_url = (
-        f"https://www.ryanair.com/gb/en/trip/flights/select?"
-        f"adults=1&originIata={departure}&destinationIata={arrival}&dateOut={date}"
-    )
-
-    return (
-        f"<b>🟢 Najlacnejší let z {get_city_name(origin)}:</b>\n"
-        f"<b>✈️ {get_city_name(departure)} → {get_city_name(arrival)}</b>\n"
-        f"<b>📅 Dátum:</b> {date}\n"
-        f"<b>💰 Cena:</b> {price} {currency}\n"
-        f"<a href='{booking_url}'>🔗 Zobraziť let</a>"
-    )
-
-
 def get_cheapest_next_7_days(origin="BTS"):
     today = datetime.now().date()
-    results = []
+    messages = []
 
     for i in range(7):
         day = today + timedelta(days=i)
-        m = str(day.month).zfill(2)
+        try:
+            fares, _ = _one_way_fares(
+                origin=origin,
+                date_from=day.strftime("%Y-%m-%d"),
+                date_to=day.strftime("%Y-%m-%d"),
+            )
+        except Exception:
+            continue
 
-        daily_results = search_tickets({
-            "month": m,
-            "origin": origin,
-            "price": "all",
-            "country": "ALL"
-        })
+        if not fares:
+            continue
 
-        for r in daily_results:
-            if f"{day.year}-{m}-{str(day.day).zfill(2)}" in r:
-                results.append((day, r))
+        cheapest = min(
+            fares,
+            key=lambda f: (f.get("outbound", {}).get("price") or {}).get("value", 9999)
+        )
+        outbound = cheapest.get("outbound", {})
+        arr = outbound.get("arrivalAirport", {}).get("iataCode", "???")
+        date = outbound.get("departureDate", "")[:10]
+        price = (outbound.get("price") or {}).get("value", 9999)
+        currency = (outbound.get("price") or {}).get("currencyCode", "EUR")
 
-    if not results:
+        booking_url = (
+            "https://www.ryanair.com/gb/en/trip/flights/select?"
+            f"adults=1&originIata={origin}&destinationIata={arr}&dateOut={date}"
+        )
+        messages.append(
+            f"<b>✈️ {get_city_name(origin)} → {get_city_name(arr)}</b>\n"
+            f"📅 {date}\n"
+            f"💶 {price} {currency}\n"
+            f"<a href='{booking_url}'>🔗 Otvoriť</a>"
+        )
+
+    if not messages:
         return "❌ Nenašli sa žiadne lety na najbližší týždeň."
 
-    cheapest = min(
-        results,
-        key=lambda x: float(x[1].split("Cena:</b> ")[1].split(" ")[0].replace(",", "."))
+    cheapest_msg = min(
+        messages,
+        key=lambda s: float(s.split('💶 ')[1].split(' ')[0].replace(',', '.'))
     )
-
-    return f"🟢 Najlacnejší let z najbližších 7 dní:\n{cheapest[1]}"
+    return f"🟢 Najlacnejší let z najbližších 7 dní:\n{cheapest_msg}"

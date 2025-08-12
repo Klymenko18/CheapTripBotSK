@@ -1,7 +1,5 @@
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
-from datetime import datetime
-from calendar import monthrange
 
 def month_keyboard():
     builder = InlineKeyboardBuilder()
@@ -17,7 +15,7 @@ def month_keyboard():
         builder.add(InlineKeyboardButton(text=label, callback_data=code))
     builder.add(
         InlineKeyboardButton(text="🗓️ Najbližších 7 dní", callback_data="week"),
-        InlineKeyboardButton(text="🔙 Späť", callback_data="back")
+        InlineKeyboardButton(text="🔙 Späť", callback_data="back"),
     )
     builder.adjust(3)
     return builder.as_markup()
@@ -25,11 +23,10 @@ def month_keyboard():
 def price_keyboard():
     builder = InlineKeyboardBuilder()
     builder.add(
-        InlineKeyboardButton(text="🌑 Do 30€", callback_data="30"),
-        InlineKeyboardButton(text="💰 30–50€", callback_data="50"),
-        InlineKeyboardButton(text="🌟 Všetky", callback_data="all"),
-        InlineKeyboardButton(text="📉 Najlacnejší", callback_data="cheapest"),
-        InlineKeyboardButton(text="🔙 Späť", callback_data="back")
+        InlineKeyboardButton(text="💶 Do 50€", callback_data="p:<=50"),
+        InlineKeyboardButton(text="💶 50–80€", callback_data="p:50-80"),
+        InlineKeyboardButton(text="🌟 Všetky", callback_data="p:all"),
+        InlineKeyboardButton(text="🔙 Späť", callback_data="back"),
     )
     builder.adjust(2)
     return builder.as_markup()
@@ -47,31 +44,14 @@ def origin_keyboard():
     builder.adjust(2)
     return builder.as_markup()
 
-def country_keyboard():
-    countries = [
-        ("🇮🇹 Taliansko", "IT"),
-        ("🇪🇸 Španielsko", "ES"),
-        ("🇬🇷 Grécko", "GR"),
-        ("🇫🇷 Francúzsko", "FR"),
-        ("🇩🇪 Nemecko", "DE"),
-        ("🇵🇹 Portugalsko", "PT"),
-        ("🇧🇪 Belgicko", "BE"),
-        ("🇳🇱 Holandsko", "NL"),
-        ("🇨🇿 Česko", "CZ"),
-        ("🇦🇹 Rakúsko", "AT"),
-        ("🇭🇷 Chorvátsko", "HR"),
-        ("🇭🇺 Maďarsko", "HU"),
-        ("🇸🇰 Slovensko", "SK"),
-        ("🇬🇧 Veľká Británia", "GB"),
-        ("🇳🇴 Nórsko", "NO"),
-        ("🇸🇪 Švédsko", "SE"),
-        ("🇩🇰 Dánsko", "DK"),
-        ("🇵🇱 Poľsko", "PL"),
-    ]
+def return_range_keyboard():
     builder = InlineKeyboardBuilder()
-    for label, code in countries:
-        builder.add(InlineKeyboardButton(text=label, callback_data=f"country:{code}"))
-    builder.add(InlineKeyboardButton(text="🌍 Všetky krajiny", callback_data="country:ALL"))
-    builder.add(InlineKeyboardButton(text="🔙 Späť", callback_data="back"))
-    builder.adjust(2)
+    builder.add(
+        InlineKeyboardButton(text="↩️ O 1–3 dni", callback_data="r:1-3"),
+        InlineKeyboardButton(text="↩️ O 3–5 dní", callback_data="r:3-5"),
+        InlineKeyboardButton(text="↩️ O 5–10 dní", callback_data="r:5-10"),
+        InlineKeyboardButton(text="🟢 Najlacnejšie (do 2 týždňov)", callback_data="r:cheap14"),
+        InlineKeyboardButton(text="🔙 Späť", callback_data="back"),
+    )
+    builder.adjust(1)
     return builder.as_markup()
