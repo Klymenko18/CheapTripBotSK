@@ -1,12 +1,17 @@
 from aiogram.fsm.state import StatesGroup, State
 
 class SearchStates(StatesGroup):
-    origin = State()          # výber mesta odletu
-    month = State()           # výber mesiaca alebo „najbližších 7 dní“
-    day = State()             # zadanie dňa (rok = 2025)
-    price = State()           # výber cenového rozsahu
-    return_range = State()    # výber rozsahu návratu
-    processing = State()      # technický stav pri vyhľadávaní
+    origin = State()            # вибір міста вильоту
+    country_mode = State()      # всі напрямки чи конкретна країна
+    country_select = State()    # вибір країни
+    country_range = State()     # вибір періоду (1м / 1–3м / 3–6м / best6)
+    country_return = State()    # ВИБІР інтервалу повернення для режиму "країна"
+
+    month = State()             # (режим "всі") вибір місяця
+    day = State()               # (режим "всі") день (рік = 2025)
+    price = State()             # (режим "всі") ціновий діапазон
+    return_range = State()      # (режим "всі") інтервал повернення
+    processing = State()        # технічний стан
 
 class SubscribeStates(StatesGroup):
     waiting_for_route = State()
