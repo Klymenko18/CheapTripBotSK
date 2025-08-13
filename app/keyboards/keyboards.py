@@ -4,7 +4,6 @@ from aiogram.types import InlineKeyboardButton
 def month_keyboard():
     builder = InlineKeyboardBuilder()
     months = {
-        "07": "📅 7 Júl",
         "08": "📅 8 August",
         "09": "📅 9 September",
         "10": "📅 10 Október",
@@ -14,7 +13,7 @@ def month_keyboard():
     for code, label in months.items():
         builder.add(InlineKeyboardButton(text=label, callback_data=code))
     builder.add(
-        InlineKeyboardButton(text="🗓️ Najbližších 7 dní", callback_data="week"),
+        # InlineKeyboardButton(text="🗓️ Najbližších 7 dní", callback_data="week"),
         InlineKeyboardButton(text="🔙 Späť", callback_data="back"),
     )
     builder.adjust(3)
@@ -25,6 +24,8 @@ def price_keyboard():
     builder.add(
         InlineKeyboardButton(text="💶 Do 50€", callback_data="p:<=50"),
         InlineKeyboardButton(text="💶 50–80€", callback_data="p:50-80"),
+        InlineKeyboardButton(text="💶 80–100€", callback_data="p:80-100"),
+        InlineKeyboardButton(text="🟢 Najlacnejšie", callback_data="p:cheapest"),
         InlineKeyboardButton(text="🌟 Všetky", callback_data="p:all"),
         InlineKeyboardButton(text="🔙 Späť", callback_data="back"),
     )
