@@ -66,7 +66,6 @@ async def process_month(callback: CallbackQuery, state: FSMContext):
         await callback.message.answer(result)
         return await cmd_start(callback.message, state)
 
-    # ulož mesiac a požiadaj o DEŇ (rok je pevne 2025)
     month = callback.data  # '07'..'12'
     await state.update_data(month=month)
     await callback.message.answer(
@@ -105,9 +104,8 @@ async def process_price(callback: CallbackQuery, state: FSMContext):
     if callback.data == "back":
         return await cmd_start(callback.message, state)
 
-    await state.update_data(price=callback.data)  # p:<=50 / p:50-80 / p:all
+    await state.update_data(price=callback.data)  # p:<=50 / p:50-80 / p:80-100 / p:cheapest / p:all
 
-    # výber rozsahu návratu
     await callback.message.answer("Vyber si návrat ⏳", reply_markup=return_range_keyboard())
     await state.set_state(SearchStates.return_range)
 

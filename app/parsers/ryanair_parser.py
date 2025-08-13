@@ -15,15 +15,22 @@ def _market_for(origin: str) -> str:
         "BUD": "hu-hu",
     }.get(origin, "sk-sk")
 
-def _price_bounds(price_cb: str) -> tuple[float, float]:
-    # p:<=50 / p:50-80 / p:80-100 / p:cheapest / p:all
+def _price_bounds(price_cb: str) -> tuple[float, float] | None:
+    """
+    Повертає (min, max) для ЗАГАЛЬНОЇ суми (Odlet + Návrat).
+    - p:cheapest  → None (повертаємо тільки один найнижчий)
+    - p:all       → None (показати всі)
+    - решта       → (min,max) для фільтра за total
+    """
+    if price_cb in ("p:cheapest", "p:all"):
+        return None
     if price_cb == "p:<=50":
-        return 0, 50
+        return (0.0, 50.0)
     if price_cb == "p:50-80":
-        return 50, 80
+        return (50.0, 80.0)
     if price_cb == "p:80-100":
-        return 80, 100
-    return 0, 9999
+        return (80.0, 100.0)
+    return (0.0, 9999.0)
 
 def _range_bounds(return_cb: str) -> tuple[int, int]:
     if return_cb == "r:1-3":
@@ -63,7 +70,6 @@ def _one_way_fares(
 
 def _fmt_rt(origin: str, to: str, out_date: str, back_date: str,
             out_price: float, back_price: float, currency: str) -> str:
-    """Formát výstupu: Odlet — dátum — cena; Návrat — dátum — cena; Spolu."""
     booking_url = (
         "https://www.ryanair.com/gb/en/trip/flights/select?"
         "adults=1&teens=0&children=0&infants=0&isConnectedFlight=false"
@@ -81,14 +87,16 @@ def _fmt_rt(origin: str, to: str, out_date: str, back_date: str,
 
 def search_round_trip(origin: str, outbound_date: str, price_cb: str, return_cb: str) -> list[str]:
     """
-    Hľadá RT:
-      - pre všetky destinácie v daný deň nájde najlacnejšie späť v zadanom okne
-      - ak price_cb == 'p:cheapest' → vráti iba JEDNU najlacnejšiu dvojicu podľa sumy
-      - inak vráti zoradený zoznam (najlacnejšie navrchu)
+    Підбирає RT:
+      1) для всіх напрямків у день `outbound_date` бере ціну «туди»;
+      2) у вікні повернення знаходить НАЙДЕШЕВШИЙ «назад»;
+      3) формує total = odlet + návrat;
+      4) ФІЛЬТРУЄ за ЗАГАЛЬНОЮ сумою згідно вибраного діапазону.
+         - p:cheapest → лише ОДИН найнижчий total
+         - p:all      → показати всі, лише відсортовані за total
     """
-    min_price, max_price = _price_bounds(price_cb)
+    price_bounds = _price_bounds(price_cb)     # None або (min,max) ДЛЯ TOTAL
     min_d, max_d = _range_bounds(return_cb)
-    limit_outbound = price_cb not in ("p:all", "p:cheapest")
 
     fares, _ = _one_way_fares(
         origin=origin,
@@ -106,12 +114,15 @@ def search_round_trip(origin: str, outbound_date: str, price_cb: str, return_cb:
         if not arr:
             continue
 
-        out_price = float((out.get("price") or {}).get("value", 9999))
+        # Ціна «туди»
+        try:
+            out_price = float((out.get("price") or {}).get("value", 9999))
+        except Exception:
+            out_price = 9999.0
+
         out_currency = (out.get("price") or {}).get("currencyCode", "EUR") or "EUR"
 
-        if limit_outbound and not (min_price <= out_price <= max_price):
-            continue
-
+        # Вікно повернення
         dep = datetime.strptime(outbound_date, "%Y-%m-%d").date()
         date_from = (dep + timedelta(days=min_d)).strftime("%Y-%m-%d")
         date_to = (dep + timedelta(days=max_d)).strftime("%Y-%m-%d")
@@ -129,14 +140,20 @@ def search_round_trip(origin: str, outbound_date: str, price_cb: str, return_cb:
         if not back_fares:
             continue
 
+        # Найдешевший «назад»
         best_back = min(
             back_fares,
             key=lambda bf: float((bf.get("outbound", {}).get("price") or {}).get("value", 9999))
         )
         back_leg = best_back.get("outbound", {})
         back_date = (back_leg.get("departureDate") or "")[:10]
-        back_price = float((back_leg.get("price") or {}).get("value", 9999))
+        try:
+            back_price = float((back_leg.get("price") or {}).get("value", 9999))
+        except Exception:
+            back_price = 9999.0
+
         currency = out_currency or (back_leg.get("price") or {}).get("currencyCode", "EUR") or "EUR"
+        total = out_price + back_price
 
         candidates.append({
             "to": arr,
@@ -145,18 +162,29 @@ def search_round_trip(origin: str, outbound_date: str, price_cb: str, return_cb:
             "out_price": out_price,
             "back_price": back_price,
             "currency": currency,
-            "total": out_price + back_price,
+            "total": total,
         })
 
     if not candidates:
         return []
 
+    # Сортуємо за total знизу вгору
     candidates.sort(key=lambda x: x["total"])
 
+    # p:cheapest → повертаємо тільки один найнижчий total
     if price_cb == "p:cheapest":
         c = candidates[0]
         return [_fmt_rt(origin, c["to"], c["out_date"], c["back_date"],
                         c["out_price"], c["back_price"], c["currency"])]
+
+    # Для діапазонів — фільтруємо за ЗАГАЛЬНОЮ сумою
+    if price_bounds is not None:
+        low, high = price_bounds
+        candidates = [c for c in candidates if low <= c["total"] <= high]
+
+    # p:all просто покаже всі (після сортування)
+    if not candidates:
+        return []
 
     results = []
     for c in candidates[:30]:
