@@ -10,6 +10,52 @@ HEADERS = {
     "Accept": "application/json",
 }
 
+# ---------------- I18N для карток результатів ----------------
+
+LANGS = ("en", "sk", "de", "uk")
+
+TR_CARD = {
+    "depart": {
+        "en": "Departure",
+        "sk": "Odlet",
+        "de": "Abflug",
+        "uk": "Виліт",
+    },
+    "return": {
+        "en": "Return",
+        "sk": "Návrat",
+        "de": "Rückflug",
+        "uk": "Повернення",
+    },
+    "total": {
+        "en": "Total",
+        "sk": "Spolu",
+        "de": "Gesamt",
+        "uk": "Разом",
+    },
+    "open": {
+        "en": "🔗 Open in Ryanair",
+        "sk": "🔗 Otvoriť v Ryanair",
+        "de": "🔗 In Ryanair öffnen",
+        "uk": "🔗 Відкрити в Ryanair",
+    },
+    "no_week": {
+        "en": "❌ No flights found for the next week.",
+        "sk": "❌ Nenašli sa žiadne lety na najbližší týždeň.",
+        "de": "❌ Keine Flüge in der nächsten Woche gefunden.",
+        "uk": "❌ Нічого не знайдено на найближчий тиждень.",
+    },
+    "week_hdr": {
+        "en": "🟢 Cheapest flight in the next 7 days:",
+        "sk": "🟢 Najlacnejší let z najbližších 7 dní:",
+        "de": "🟢 Günstigster Flug der nächsten 7 Tage:",
+        "uk": "🟢 Найдешевший рейс у найближчі 7 днів:",
+    },
+}
+
+def _lng(lang: str) -> str:
+    return lang if lang in LANGS else "en"
+
 def _market_for(origin: str) -> str:
     return {
         "BTS": "sk-sk",
@@ -17,6 +63,14 @@ def _market_for(origin: str) -> str:
         "VIE": "at-en",
         "BUD": "hu-hu",
     }.get(origin, "sk-sk")
+
+def _api_language(lang: str) -> str:
+    """
+    Параметр language для API (впливає незначно).
+    Для української віддаємо 'en', бо 'uk' Ryanair часто ігнорує.
+    """
+    lang = _lng(lang)
+    return {"en": "en", "sk": "sk", "de": "de", "uk": "en"}[lang]
 
 def _price_bounds(price_cb: str) -> tuple[float, float] | None:
     # для загальної суми (odlet + návrat)
@@ -47,6 +101,7 @@ def _one_way_fares(
     market: str | None = None,
     limit: int = 200,
     offset: int = 0,
+    lang: str = "en",
 ):
     url = "https://services-api.ryanair.com/farfnd/3/oneWayFares"
     params = {
@@ -54,7 +109,7 @@ def _one_way_fares(
         "outboundDepartureDateFrom": date_from,
         "outboundDepartureDateTo": date_to,
         "market": market or _market_for(origin),
-        "language": "sk",
+        "language": _api_language(lang),
         "limit": limit,
         "offset": offset,
     }
@@ -66,8 +121,17 @@ def _one_way_fares(
     data = res.json()
     return data.get("fares", []), int(data.get("total", 0))
 
-def _fmt_rt(origin: str, to: str, out_date: str, back_date: str,
-            out_price: float, back_price: float, currency: str = "EUR") -> str:
+def _fmt_rt(
+    origin: str,
+    to: str,
+    out_date: str,
+    back_date: str,
+    out_price: float,
+    back_price: float,
+    currency: str = "EUR",
+    lang: str = "en",
+) -> str:
+    lang = _lng(lang)
     booking_url = (
         "https://www.ryanair.com/gb/en/trip/flights/select?"
         "adults=1&teens=0&children=0&infants=0&isConnectedFlight=false"
@@ -77,14 +141,20 @@ def _fmt_rt(origin: str, to: str, out_date: str, back_date: str,
     total = float(out_price) + float(back_price)
     return (
         f"<b>✈️ {get_city_name(origin)} → {get_city_name(to)}</b>\n"
-        f"🛫 <b>Odlet</b> — {out_date} — <b>{float(out_price):.2f} {currency}</b>\n"
-        f"🛬 <b>Návrat</b> — {back_date} — <b>{float(back_price):.2f} {currency}</b>\n"
-        f"🟢 <b>Spolu:</b> {total:.2f} {currency}\n"
-        f"<a href='{booking_url}'>🔗 Otvoriť v Ryanair</a>"
+        f"🛫 <b>{TR_CARD['depart'][lang]}</b> — {out_date} — <b>{float(out_price):.2f} {currency}</b>\n"
+        f"🛬 <b>{TR_CARD['return'][lang]}</b> — {back_date} — <b>{float(back_price):.2f} {currency}</b>\n"
+        f"🟢 <b>{TR_CARD['total'][lang]}:</b> {total:.2f} {currency}\n"
+        f"<a href='{booking_url}'>{TR_CARD['open'][lang]}</a>"
     )
 
-def _best_return(from_iata: str, to_iata: str, out_date: str,
-                 min_days: int = 1, max_days: int = 14) -> tuple[Optional[str], float]:
+def _best_return(
+    from_iata: str,
+    to_iata: str,
+    out_date: str,
+    min_days: int = 1,
+    max_days: int = 14,
+    lang: str = "en",
+) -> tuple[Optional[str], float]:
     """Найдешевший зворотний квиток у вікні [min_days; max_days] від out_date."""
     dep = datetime.strptime(out_date, "%Y-%m-%d").date()
     date_from = (dep + timedelta(days=min_days)).strftime("%Y-%m-%d")
@@ -96,6 +166,7 @@ def _best_return(from_iata: str, to_iata: str, out_date: str,
             date_from=date_from,
             date_to=date_to,
             market=_market_for(to_iata),
+            lang=lang,
         )
     except Exception:
         return None, 9999.0
@@ -113,7 +184,14 @@ def _best_return(from_iata: str, to_iata: str, out_date: str,
 
 # ---------------- all-countries (старий флоу) ----------------
 
-def search_round_trip(origin: str, outbound_date: str, price_cb: str, return_cb: str) -> list[str]:
+def search_round_trip(
+    origin: str,
+    outbound_date: str,
+    price_cb: str,
+    return_cb: str,
+    lang: str = "en",
+) -> list[str]:
+    lang = _lng(lang)
     price_bounds = _price_bounds(price_cb)     # None або (min,max) ДЛЯ TOTAL
     min_d, max_d = _range_bounds(return_cb)
 
@@ -122,6 +200,7 @@ def search_round_trip(origin: str, outbound_date: str, price_cb: str, return_cb:
         date_from=outbound_date,
         date_to=outbound_date,
         market=_market_for(origin),
+        lang=lang,
     )
     if not fares:
         return []
@@ -138,7 +217,7 @@ def search_round_trip(origin: str, outbound_date: str, price_cb: str, return_cb:
         except Exception:
             out_price = 9999.0
 
-        back_date, back_price = _best_return(origin, arr, outbound_date, min_days=min_d, max_days=max_d)
+        back_date, back_price = _best_return(origin, arr, outbound_date, min_days=min_d, max_days=max_d, lang=lang)
         if not back_date:
             continue
 
@@ -159,7 +238,7 @@ def search_round_trip(origin: str, outbound_date: str, price_cb: str, return_cb:
 
     if price_cb == "p:cheapest":
         c = candidates[0]
-        return [_fmt_rt(origin, c["to"], c["out_date"], c["back_date"], c["out_price"], c["back_price"])]
+        return [_fmt_rt(origin, c["to"], c["out_date"], c["back_date"], c["out_price"], c["back_price"], lang=lang)]
 
     if price_bounds is not None:
         low, high = price_bounds
@@ -169,7 +248,7 @@ def search_round_trip(origin: str, outbound_date: str, price_cb: str, return_cb:
         return []
 
     return [
-        _fmt_rt(origin, c["to"], c["out_date"], c["back_date"], c["out_price"], c["back_price"])
+        _fmt_rt(origin, c["to"], c["out_date"], c["back_date"], c["out_price"], c["back_price"], lang=lang)
         for c in candidates[:30]
     ]
 
@@ -204,13 +283,19 @@ def _window_dates(window_code: str) -> tuple[str, str]:
         start, end = today, today + timedelta(days=180)
     return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
 
-def search_round_trip_country_window(origin: str, country_code: str,
-                                     window_code: str, return_cb: str,
-                                     top_n: int = 3) -> List[str]:
+def search_round_trip_country_window(
+    origin: str,
+    country_code: str,
+    window_code: str,
+    return_cb: str,
+    top_n: int = 3,
+    lang: str = "en",
+) -> List[str]:
     """
     1–3 найдешевші RT у міста обраної країни в заданому вікні дат
     та з обраним інтервалом повернення (r:1-3 / r:3-5 / r:5-10 / r:cheap14).
     """
+    lang = _lng(lang)
     date_from, date_to = _window_dates(window_code)
     min_d, max_d = _range_bounds(return_cb)
 
@@ -222,6 +307,7 @@ def search_round_trip_country_window(origin: str, country_code: str,
             market=_market_for(origin),
             limit=200,
             offset=0,
+            lang=lang,
         )
     except Exception:
         fares = []
@@ -246,7 +332,7 @@ def search_round_trip_country_window(origin: str, country_code: str,
         except Exception:
             out_price = 9999.0
 
-        back_date, back_price = _best_return(origin, arr_iata, out_date, min_days=min_d, max_days=max_d)
+        back_date, back_price = _best_return(origin, arr_iata, out_date, min_days=min_d, max_days=max_d, lang=lang)
         if not back_date:
             continue
 
@@ -273,12 +359,13 @@ def search_round_trip_country_window(origin: str, country_code: str,
     top = sorted(best_per_city.values(), key=lambda x: x["total"])[:max(1, min(top_n, 3))]
 
     return [
-        _fmt_rt(origin, c["to"], c["out_date"], c["back_date"], c["out_price"], c["back_price"])
+        _fmt_rt(origin, c["to"], c["out_date"], c["back_date"], c["out_price"], c["back_price"], lang=lang)
         for c in top
     ]
 
 # збережено — тижневий пошук (one‑way)
-def get_cheapest_next_7_days(origin="BTS"):
+def get_cheapest_next_7_days(origin="BTS", lang: str = "en"):
+    lang = _lng(lang)
     today = datetime.now().date()
     messages = []
 
@@ -289,6 +376,7 @@ def get_cheapest_next_7_days(origin="BTS"):
                 origin=origin,
                 date_from=day.strftime("%Y-%m-%d"),
                 date_to=day.strftime("%Y-%m-%d"),
+                lang=lang,
             )
         except Exception:
             continue
@@ -312,14 +400,14 @@ def get_cheapest_next_7_days(origin="BTS"):
             f"<b>✈️ {get_city_name(origin)} → {get_city_name(arr)}</b>\n"
             f"📅 {date}\n"
             f"💶 {price:.2f} EUR\n"
-            f"<a href='{booking_url}'>🔗 Otvoriť</a>"
+            f"<a href='{booking_url}'>{TR_CARD['open'][lang]}</a>"
         )
 
     if not messages:
-        return "❌ Nenašli sa žiadne lety na najbližší týždeň."
+        return TR_CARD["no_week"][lang]
 
     cheapest_msg = min(
         messages,
         key=lambda s: float(s.split('💶 ')[1].split(' ')[0].replace(',', '.'))
     )
-    return f"🟢 Najlacnejší let z najbližších 7 dní:\n{cheapest_msg}"
+    return f"{TR_CARD['week_hdr'][lang]}\n{cheapest_msg}"

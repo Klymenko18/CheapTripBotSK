@@ -1,8 +1,22 @@
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
+import os
 
+# Завантажуємо токен з .env
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
+if not BOT_TOKEN:
+    raise RuntimeError("BOT_TOKEN is not set (put it into .env)")
 
-BOT_TOKEN= "8034826002:AAHP8Fp9dOIDYi1LdtGbqFqALJuCjTMVpDc"
-bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+# Створюємо екземпляр бота
+bot = Bot(
+    token=BOT_TOKEN,
+    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+)
+
+# Dispatcher зберігатиме стан для вибору мови при /start
 dp = Dispatcher()
+
+# Функція старту бота
+async def on_startup():
+    print("🚀 Bot is running. Waiting for /start to choose language...")
