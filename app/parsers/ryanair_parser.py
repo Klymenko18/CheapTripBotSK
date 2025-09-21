@@ -15,25 +15,10 @@ HEADERS = {
 LANGS = ("en", "sk", "de", "uk")
 
 TR_CARD = {
-    "depart": {
-        "en": "Departure",
-        "sk": "Odlet",
-        "de": "Abflug",
-        "uk": "Виліт",
-    },
-    "return": {
-        "en": "Return",
-        "sk": "Návrat",
-        "de": "Rückflug",
-        "uk": "Повернення",
-    },
-    "total": {
-        "en": "Total",
-        "sk": "Spolu",
-        "de": "Gesamt",
-        "uk": "Разом",
-    },
-    "open": {
+    "depart": {"en": "Departure", "sk": "Odlet", "de": "Abflug", "uk": "Виліт"},
+    "return": {"en": "Return", "sk": "Návrat", "de": "Rückflug", "uk": "Повернення"},
+    "total":  {"en": "Total", "sk": "Spolu", "de": "Gesamt", "uk": "Разом"},
+    "open":   {
         "en": "🔗 Open in Ryanair",
         "sk": "🔗 Otvoriť v Ryanair",
         "de": "🔗 In Ryanair öffnen",
@@ -73,7 +58,6 @@ def _api_language(lang: str) -> str:
     return {"en": "en", "sk": "sk", "de": "de", "uk": "en"}[lang]
 
 def _price_bounds(price_cb: str) -> tuple[float, float] | None:
-    # для загальної суми (odlet + návrat)
     if price_cb in ("p:cheapest", "p:all"):
         return None
     if price_cb == "p:<=50":
@@ -155,7 +139,6 @@ def _best_return(
     max_days: int = 14,
     lang: str = "en",
 ) -> tuple[Optional[str], float]:
-    """Найдешевший зворотний квиток у вікні [min_days; max_days] від out_date."""
     dep = datetime.strptime(out_date, "%Y-%m-%d").date()
     date_from = (dep + timedelta(days=min_days)).strftime("%Y-%m-%d")
     date_to   = (dep + timedelta(days=max_days)).strftime("%Y-%m-%d")
@@ -192,7 +175,7 @@ def search_round_trip(
     lang: str = "en",
 ) -> list[str]:
     lang = _lng(lang)
-    price_bounds = _price_bounds(price_cb)     # None або (min,max) ДЛЯ TOTAL
+    price_bounds = _price_bounds(price_cb)
     min_d, max_d = _range_bounds(return_cb)
 
     fares, _ = _one_way_fares(
@@ -255,7 +238,6 @@ def search_round_trip(
 # ---------------- country mode + період + інтервал повернення ----------------
 
 def _airport_country_from_api(outbound_obj: Dict[str, Any]) -> Optional[str]:
-    """Код країни з відповіді API; якщо нема — з локальної мапи."""
     airport = outbound_obj.get("arrivalAirport", {}) or {}
     code = airport.get("countryCode") or (airport.get("country", {}) or {}).get("code")
     if code:
@@ -266,12 +248,6 @@ def _airport_country_from_api(outbound_obj: Dict[str, Any]) -> Optional[str]:
     return None
 
 def _window_dates(window_code: str) -> tuple[str, str]:
-    """
-    m:1    -> [today, today+30)
-    m:1-3  -> [today+30, today+90)
-    m:3-6  -> [today+90, today+180)
-    m:best6 (default) -> [today, today+180)
-    """
     today = datetime.now().date()
     if window_code == "m:1":
         start, end = today, today + timedelta(days=30)
@@ -291,10 +267,6 @@ def search_round_trip_country_window(
     top_n: int = 3,
     lang: str = "en",
 ) -> List[str]:
-    """
-    1–3 найдешевші RT у міста обраної країни в заданому вікні дат
-    та з обраним інтервалом повернення (r:1-3 / r:3-5 / r:5-10 / r:cheap14).
-    """
     lang = _lng(lang)
     date_from, date_to = _window_dates(window_code)
     min_d, max_d = _range_bounds(return_cb)
@@ -349,7 +321,6 @@ def search_round_trip_country_window(
     if not targets:
         return []
 
-    # один найкращий варіант на кожне місто
     best_per_city: Dict[str, Dict[str, Any]] = {}
     for c in targets:
         key = c["to"]

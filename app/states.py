@@ -9,6 +9,10 @@ class SearchStates(StatesGroup):
     country_range = State()    # вибір періоду (1м / 1–3м / 3–6м / best6)
     country_return = State()   # ВИБІР інтервалу повернення для режиму "країна"
 
+    country_city_mode = State()     # вибір "вся країна" чи "місто"
+    country_city_select = State()   # вибір міста в межах країни
+
+
     month = State()            # (режим "всі") вибір місяця
     day = State()              # (режим "всі") день (рік = 2025)
     price = State()            # (режим "всі") ціновий діапазон

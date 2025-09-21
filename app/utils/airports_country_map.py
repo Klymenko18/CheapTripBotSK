@@ -1,5 +1,6 @@
 # Мінімальна мапа IATA → код країни (ISO-3166 alpha-2).
-# За потреби розширюй. Якщо Ryanair API поверне countryCode, вона матиме пріоритет.
+# Якщо Ryanair API повертає countryCode, він має пріоритет.
+
 airport_country = {
     # Italy
     "BGY": "IT", "MXP": "IT", "VCE": "IT", "BLQ": "IT", "CIA": "IT", "FCO": "IT", "TPS": "IT", "AHO": "IT", "RMI": "IT",
@@ -19,14 +20,13 @@ airport_country = {
     "WAW": "PL", "KRK": "PL", "GDN": "PL",
     # United Kingdom
     "STN": "GB", "LTN": "GB", "LGW": "GB", "LHR": "GB", "MAN": "GB", "LBA": "GB", "EDI": "GB",
-    # Others in your cities.py
+    # Others
     "SOF": "BG", "BOJ": "BG",
     "MLA": "MT",
     "PFO": "CY",
     "DUB": "IE",
-    "ZAD": "HR", "RJK": "HR",
+    "ZAD": "HR", "RJK": "HR", "PUY": "HR",
     "BNX": "BA",
-    "PUY": "HR",
     "TGD": "ME",
     # Origins
     "BTS": "SK", "KSC": "SK",

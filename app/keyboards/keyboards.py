@@ -3,10 +3,8 @@ from aiogram.types import InlineKeyboardButton
 
 # ---------------- I18N ----------------
 
-# доступні мови
 LANGS = ("en", "sk", "de", "uk")
 
-# базові фрази
 TR = {
     "back": {
         "en": "🔙 Back",

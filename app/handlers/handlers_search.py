@@ -17,7 +17,7 @@ from app.keyboards.keyboards import (
 from app.parsers.ryanair_parser import (
     search_round_trip,
     get_cheapest_next_7_days,
-    search_round_trip_country_window,  # парсер з return_cb
+    search_round_trip_country_window,
 )
 from app.utils.cities import get_city_name
 
@@ -115,7 +115,6 @@ async def send_batch(messages: list[str], send_func):
 
 @router.message(F.text == "/start")
 async def cmd_start(message: Message, state: FSMContext):
-    # завжди починаємо з вибору мови
     await state.clear()
     await message.answer(T["choose_lang"], reply_markup=language_keyboard())
     await state.set_state(SearchStates.language)
@@ -141,7 +140,6 @@ async def process_origin(callback: CallbackQuery, state: FSMContext):
     lang = _lng(data)
 
     if callback.data == "back":
-        # назад до вибору мови
         return await cmd_start(callback.message, state)
 
     if ":" not in callback.data:
@@ -180,7 +178,6 @@ async def process_country_select(callback: CallbackQuery, state: FSMContext):
     lang = _lng(data)
 
     if callback.data == "back":
-        # повертаємось до режиму вибору (all / pick)
         await callback.message.answer(T["country_or_all"][lang], reply_markup=country_mode_keyboard(lang))
         return await state.set_state(SearchStates.country_mode)
 
@@ -234,6 +231,7 @@ async def process_country_return(callback: CallbackQuery, state: FSMContext):
         window_code=window_code,
         return_cb=return_cb,
         top_n=3,
+        lang=lang,
     )
 
     if results:
@@ -262,7 +260,7 @@ async def process_month(callback: CallbackQuery, state: FSMContext):
 
         city_name = get_city_name(origin)
         await callback.message.answer(f"🔍 {city_name}: 7‑day cheapest scan…")
-        result = get_cheapest_next_7_days(origin)
+        result = get_cheapest_next_7_days(origin, lang=lang)
         await callback.message.answer(result)
         return await cmd_start(callback.message, state)
 
@@ -339,6 +337,7 @@ async def process_return_range(callback: CallbackQuery, state: FSMContext):
         outbound_date=outbound_date,
         price_cb=price_cb,
         return_cb=range_cb,
+        lang=lang,
     )
 
     if results:

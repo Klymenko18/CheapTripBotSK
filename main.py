@@ -1,5 +1,4 @@
 import asyncio
-import os
 from dotenv import load_dotenv
 from aiogram.types import BotCommand
 from app.bot.bot import bot, dp
@@ -17,18 +16,21 @@ async def set_bot_commands(bot):
 
 
 async def main():
-    # 1. Ініціалізація бази
+    # Вимикаємо webhook, інакше Telegram блокує polling (Conflict)
+    await bot.delete_webhook(drop_pending_updates=True)
+
+    # 1) Ініціалізація БД
     init_db()
 
-    # 2. Реєстрація хендлерів (у т.ч. /start → вибір мови)
+    # 2) Реєстрація хендлерів (у т.ч. /start → вибір мови)
     register_handlers(dp)
 
-    # 3. Команди для меню бота
+    # 3) Команди меню бота
     await set_bot_commands(bot)
 
     print("🚀 Bot started. Waiting for /start to choose language...")
 
-    # 4. Запуск
+    # 4) Запуск long polling
     await dp.start_polling(bot)
 
 
